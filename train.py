@@ -13,7 +13,7 @@ eval_iters = 200
 
 gradient_accumulation_steps = 5 * 8
 batch_size = 64 
-block_size = 1024
+block_size = 256 
 n_layer = 6
 n_head = 6
 n_embed = 384
@@ -45,7 +45,7 @@ torch.manual_seed(42)
 
 device_type = 'cuda'
 
-ctx = torch.autocast("cuda")
+ctx = torch.autocast("cuda", dtype=torch.bfloat16)
 
 data_dir = 'data/shakespeare/'
 
@@ -53,7 +53,7 @@ def get_batch(split):
     if split == 'train':
         data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
     else:
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
     ix = torch.randint(len(data) - block_size, (batch_size,))
 
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
