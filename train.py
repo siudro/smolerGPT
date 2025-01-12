@@ -135,21 +135,21 @@ while True:
         if grad_clip != 0.0:
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-        scaler.step(optimizer)
-        scaler.update()
+    scaler.step(optimizer)
+    scaler.update()
 
-        optimizer.zero_grad(set_to_none=True)
-        
-        t1 = time.time()
-        dt = t1 - t0
-        t0 = t1
+    optimizer.zero_grad(set_to_none=True)
+    
+    t1 = time.time()
+    dt = t1 - t0
+    t0 = t1
 
-        if iter_num % log_interval == 0:
-            lossf = loss.item() * gradient_accumulation_steps
+    if iter_num % log_interval == 0:
+        lossf = loss.item() * gradient_accumulation_steps
 
-            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
 
-            iter_num+=1
+        iter_num+=1
 
-        if iter_num > max_iters:
-            break
+    if iter_num > max_iters:
+        break
