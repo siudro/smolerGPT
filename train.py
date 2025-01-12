@@ -7,12 +7,12 @@ import numpy as np
 import torch
 
 out_dir = 'out'
-eval_interval = 250 
+eval_interval = 100
 log_interval = 10
 eval_iters = 200
 
 gradient_accumulation_steps = 5 * 8
-batch_size = 64 
+batch_size = 12 
 block_size = 256 
 n_layer = 6
 n_head = 6
@@ -35,7 +35,7 @@ min_lr = learning_rate / 10
 
 device = 'cuda'
 dtype = 'bfloat16'
-compile = False 
+compile = True 
 
 tokens_per_iter = gradient_accumulation_steps * batch_size * block_size
 
@@ -124,6 +124,17 @@ while True:
     if iter_num % eval_interval == 0:
         losses = estimate_loss()
         print(f"step {iter_num}: train_loss {losses['train']:.4f}, val_loss {losses['val']:.4f}")
+
+        if losses['val'] < best_val_loss:
+            best_val_loss = losses['val']
+            checkpoint = {
+                'model': model.state_dict(),
+                'model_args': model_args,
+                'iter_num': iter_num,
+                'best_val_loss': best_val_loss,
+            }
+            print(f"Saving checkpoint to {out_dir}")
+            torch.save(checkpoint, os.path.join(out_dir,'ckpt.pt'))
     
     for micro_step in range(gradient_accumulation_steps):
         with ctx:
@@ -149,7 +160,7 @@ while True:
 
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
 
-        iter_num+=1
+    iter_num+=1
 
     if iter_num > max_iters:
         break
