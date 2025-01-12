@@ -132,9 +132,9 @@ while True:
         X, Y = get_batch('train')
         scaler.scale(loss).backward()
 
-        if grad_clip != 0.0:
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    if grad_clip != 0.0:
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     scaler.step(optimizer)
     scaler.update()
 
