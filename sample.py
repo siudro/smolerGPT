@@ -3,8 +3,8 @@ import torch
 import tiktoken
 from model import GPTConfig, GPT
 
-out_dir = "out"
-start = "\n"
+out_dir = "out/v2/"
+start = "There was a king"
 num_samples = 10
 max_new_tokens = 500
 temperature = 0.8
