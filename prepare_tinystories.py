@@ -58,7 +58,7 @@ def process_shard(args):
     for example in tqdm(data, position=shard_id):
         text = example['story']
         text = text.strip();
-        tokens = tokenizer.encode(text + '\n<|endoftext|>\n')
+        tokens = tokenizer.encode(text + '\n<|endoftext|>\n', allowed_special={"<|endoftext|>"})
         all_tokens.extend(tokens)
 
     all_tokens = np.array(all_tokens, dtype=np.uint16)
