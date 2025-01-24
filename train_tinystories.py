@@ -3,11 +3,12 @@ from functools import partial
 import time
 import math
 import os
-import numpy as np
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from prepare_tinystories import Task
 
 out_dir = "out/v2"
+writer = SummaryWriter(log_dir=os.path.join(out_dir, "logs"))
 eval_interval = 100
 log_interval = 10
 eval_iters = 200
@@ -37,6 +38,7 @@ min_lr = learning_rate / 10
 device = "cuda"
 dtype = "bfloat16"
 compile = True
+resume = True 
 
 tokens_per_iter = gradient_accumulation_steps * batch_size * block_size
 
@@ -72,8 +74,24 @@ iter_batches = partial(
     num_workers=0
 )
 
-gptconf = GPTConfig(**model_args)
-model = GPT(gptconf).to(device)
+best_val_loss = 1e9
+if resume:
+    ckpt_path = os.path.join(out_dir, "ckpt-new.pt")
+    checkpoint = torch.load(ckpt_path, map_location=device)
+    gptconf = GPTConfig(**checkpoint["model_args"])
+    model = GPT(gptconf)
+    state_dict = checkpoint["model"]
+    unwanted_prefix = "_orig_mod."
+    best_val_loss = checkpoint["best_val_loss"]
+
+    for k, v in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
+    print("Loaded checkpoint")
+else:
+    gptconf = GPTConfig(**model_args)
+    model = GPT(gptconf).to(device)
 
 scaler = torch.GradScaler(enabled=(dtype == "float16"))
 
@@ -116,10 +134,10 @@ print("Number of params:", params)
 
 train_batch_iter = iter_batches(split="train")
 
+
 X, Y = next(train_batch_iter)
 
 iter_num = 0
-best_val_loss = 1e9
 t0 = time.time()
 while True:
     lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -131,6 +149,10 @@ while True:
         print(
             f"step {iter_num}: train_loss {losses['train']:.4f}, val_loss {losses['val']:.4f}"
         )
+
+        writer.add_scalar("train_loss", losses["train"], iter_num)
+        writer.add_scalar("val_loss", losses["val"], iter_num)
+        writer.add_scalar("lr", lr, iter_num)
 
         if losses["val"] < best_val_loss:
             best_val_loss = losses["val"]
@@ -172,3 +194,4 @@ while True:
     if iter_num > max_iters:
         break
 
+writer.close()
