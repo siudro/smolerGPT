@@ -54,21 +54,18 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
-
 class FeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embed, config.n_embed * 4, bias=config.bias)
-        self.c_proj = nn.Linear(config.n_embed * 4, config.n_embed, bias=config.bias)
-        self.relu = nn.ReLU()
+        hidden_dim = 4 * config.n_embed
+        hidden_dim = int(2 * hidden_dim / 3)
+        self.w1 = nn.Linear(config.n_embed, hidden_dim, bias=False)
+        self.w2 = nn.Linear(hidden_dim, config.n_embed, bias=False)
+        self.w3 = nn.Linear(config.n_embed, hidden_dim, bias=False)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = self.relu(x) ** 2 # Squared ReLU
-        x = self.c_proj(x)
-        x = self.dropout(x)
-        return x
+        return self.dropout(self.w2(F.silu(self.w1(x)) * self.w3(x)))
 
 
 class Block(nn.Module):
@@ -180,5 +177,8 @@ class GPT(nn.Module):
                 logits[logits < v[:, [-1]]] = float("-Inf")
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
+            if idx_next == 50256:
+                break
             idx = torch.cat([idx, idx_next], dim=-1)
         return idx
+
