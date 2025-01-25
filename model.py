@@ -25,13 +25,17 @@ class CausalSelfAttention(nn.Module):
         self.c_proj = nn.Linear(config.n_embed, config.n_embed, bias=config.bias)
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
-        self.register_buffer(
+        
+        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
+
+        if not self.flash:
+            print("Not using flash attention")
+            self.register_buffer(
             "bias",
             torch.tril(torch.ones(config.block_size, config.block_size)).view(
                 1, 1, config.block_size, config.block_size
             ),
-        )
-
+            )     
     def forward(self, x):
         B, T, C = x.shape
 
@@ -40,14 +44,17 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
         v = v.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
 
-        attn_pattern = (q @ k.transpose(-2, -1)) * (
-            1.0 / math.sqrt(k.shape[-1])
-        )  # B, nh, T, T
-        attn_pattern = attn_pattern.masked_fill(
-            self.bias[:, :, :T, :T] == 0, float("-inf")
-        )
-        attn = F.softmax(attn_pattern, dim=-1)
-        y = attn @ v  # B, nh, T, T @ B, nh, T, hs -> B, nh, T, hs
+        if self.flash:
+            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout=self.config.dropout if self.training else 0, is_causal=True)
+        else:
+            attn_pattern = (q @ k.transpose(-2, -1)) * (
+                1.0 / math.sqrt(k.shape[-1])
+            )  # B, nh, T, T
+            attn_pattern = attn_pattern.masked_fill(
+                self.bias[:, :, :T, :T] == 0, float("-inf")
+            )
+            attn = F.softmax(attn_pattern, dim=-1)
+            y = attn @ v  # B, nh, T, T @ B, nh, T, hs -> B, nh, T, hs
 
         y = y.transpose(1, 2).contiguous().view(B, T, C)
 
