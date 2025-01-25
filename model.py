@@ -45,7 +45,7 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
 
         if self.flash:
-            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_=self.config.dropout if self.training else 0, is_causal=True)
+            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.dropout if self.training else 0, is_causal=True)
         else:
             attn_pattern = (q @ k.transpose(-2, -1)) * (
                 1.0 / math.sqrt(k.shape[-1])
