@@ -1,24 +1,15 @@
-import torch
-import inspect
 import math
-from torch import nn
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
+import inspect
+from typing import Optional, Tuple
 from dataclasses import dataclass
 
-
-@dataclass
-class GPTConfig:
-    block_size: int = 1024
-    vocab_size: int = 50304
-    n_layer: int = 12
-    n_head: int = 12
-    n_embed: int = 768
-    dropout: float = 0.0
-    bias: bool = False
-
+from config import GPTConfig
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
         self.c_attn = nn.Linear(config.n_embed, 3 * config.n_embed, bias=config.bias)
@@ -168,24 +159,44 @@ class GPT(nn.Module):
         return optimizer
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None, min_p=None):
         for _ in range(max_new_tokens):
-            context = (
-                idx
-                if idx.size(1) < self.config.block_size
-                else idx[:, -self.config.block_size :]
-            )
+            context = idx if idx.size(1) < self.config.block_size else idx[:, -self.config.block_size:]
             logits, _ = self(context)
-
+            
             logits = logits[:, -1, :] / temperature
-
+            
+            if top_p is not None and top_p > 0.0:
+                probs = torch.softmax(logits, dim=-1)
+                sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)
+                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                
+                mask = cumulative_probs >= top_p
+                mask[..., 0] = True  
+                
+                cutoff_indices = mask.int().argmax(dim=-1, keepdim=True)
+                
+                top_p_mask = torch.zeros_like(logits, dtype=torch.bool)
+                for b in range(logits.size(0)):
+                    cut = cutoff_indices[b].item()
+                    kept_indices = sorted_indices[b, :cut+1]
+                    top_p_mask[b, kept_indices] = True
+                logits[~top_p_mask] = float('-inf')
+            
             if top_k is not None:
-                v, _ = torch.topk(logits, k=min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = float("-Inf")
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = float('-inf')
+            
+            if min_p is not None and min_p > 0.0:
+                logit_max = logits.max(dim=-1, keepdim=True).values
+                threshold = logit_max + torch.log(torch.tensor(min_p, device=logits.device, dtype=logits.dtype))
+                logits[logits < threshold] = float('-inf')
+            
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
-            if idx_next == 50256:
+            
+            if idx_next == 2: 
                 break
             idx = torch.cat([idx, idx_next], dim=-1)
+        
         return idx
-
