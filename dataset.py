@@ -5,6 +5,7 @@ from pathlib import Path
 import glob
 from typing import Iterator, Tuple
 
+
 class PreTokDataset(torch.utils.data.IterableDataset):
     def __init__(self, split: str, max_seq_len: int):
         super().__init__()
@@ -14,8 +15,10 @@ class PreTokDataset(torch.utils.data.IterableDataset):
     def __iter__(self) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
         bin_dir = Path("data/TinyStories_all_data")
         shard_filenames = sorted(glob.glob(str(bin_dir / "*.bin")))
-        shard_filenames = shard_filenames[1:] if self.split == "train" else shard_filenames[:1]
-        
+        shard_filenames = (
+            shard_filenames[1:] if self.split == "train" else shard_filenames[:1]
+        )
+
         rng = random.Random(42)
         while True:
             rng.shuffle(shard_filenames)
@@ -24,7 +27,7 @@ class PreTokDataset(torch.utils.data.IterableDataset):
                 num_batches = len(data) // self.max_seq_len - 1
                 idxs = list(range(num_batches))
                 rng.shuffle(idxs)
-                
+
                 for idx in idxs:
                     start = idx * self.max_seq_len
                     end = (idx + 1) * self.max_seq_len
@@ -33,14 +36,15 @@ class PreTokDataset(torch.utils.data.IterableDataset):
                     y = chunk[1:]
                     yield x, y
 
+
 class Task:
     @staticmethod
-    def iter_batches(batch_size: int, device: str, num_workers: int = 0, **dataset_kwargs) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
+    def iter_batches(
+        batch_size: int, device: str, num_workers: int = 0, **dataset_kwargs
+    ) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
         ds = PreTokDataset(**dataset_kwargs)
         dl = torch.utils.data.DataLoader(
-            ds, 
-            batch_size=batch_size,
-            num_workers=num_workers
+            ds, batch_size=batch_size, num_workers=num_workers
         )
         for x, y in dl:
             x = x.to(device)

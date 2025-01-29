@@ -3,6 +3,7 @@ from sentencepiece import SentencePieceProcessor
 
 TOKENIZER_MODEL = "tokenizer.model"
 
+
 class Tokenizer:
     def __init__(self, tokenizer_model):
         model_path = tokenizer_model if tokenizer_model else TOKENIZER_MODEL

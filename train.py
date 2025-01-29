@@ -9,17 +9,21 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from dataset import Task
 
 train_config = TrainingConfig()
-out_dir = "out/v2"
+out_dir = "out/"
 writer = SummaryWriter(log_dir=os.path.join(out_dir, "logs"))
-resume = True
+resume = False
 
-tokens_per_iter = train_config.gradient_accumulation_steps * train_config.batch_size * GPTConfig.block_size
+tokens_per_iter = (
+    train_config.gradient_accumulation_steps
+    * train_config.batch_size
+    * GPTConfig.block_size
+)
 print("Tokens per iteration: ", tokens_per_iter)
 
 torch.manual_seed(42)
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision("high")
 
 ctx = torch.autocast(train_config.device, dtype=torch.bfloat16)
 
@@ -38,7 +42,7 @@ iter_batches = partial(
     batch_size=train_config.batch_size,
     max_seq_len=GPTConfig.block_size,
     device=train_config.device,
-    num_workers=0
+    num_workers=0,
 )
 
 best_val_loss = 1e9
@@ -53,7 +57,7 @@ if resume:
 
     for k, v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     print("Loaded checkpoint")
 else:
@@ -65,11 +69,12 @@ optimizer = model.configure_optimizers(
     train_config.weight_decay,
     train_config.learning_rate,
     (train_config.beta1, train_config.beta2),
-    train_config.device
+    train_config.device,
 )
 
 if train_config.compile:
     model = torch.compile(model)
+
 
 @torch.no_grad()
 def estimate_loss():
@@ -87,14 +92,20 @@ def estimate_loss():
     model.train()
     return out
 
+
 def get_lr(it):
     if it < train_config.warmup_iters:
         return train_config.learning_rate * (it + 1) / (train_config.warmup_iters + 1)
     if it > train_config.lr_decay_iters:
         return train_config.min_lr
-    decay_ratio = (it - train_config.warmup_iters) / (train_config.lr_decay_iters - train_config.warmup_iters)
+    decay_ratio = (it - train_config.warmup_iters) / (
+        train_config.lr_decay_iters - train_config.warmup_iters
+    )
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
-    return train_config.min_lr + coeff * (train_config.learning_rate - train_config.min_lr)
+    return train_config.min_lr + coeff * (
+        train_config.learning_rate - train_config.min_lr
+    )
+
 
 params = sum([p.numel() for p in model.parameters() if p.requires_grad])
 print("Number of params:", params)
