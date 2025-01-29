@@ -88,6 +88,30 @@ Validation Loss - `1.0491`
 
 ![Loss Curve](assets/loss.png)
 
+## Sample Outputs 📝
+
+### Example 1
+```text
+Prompt: One day, Lily met a unicorn
+
+Output:
+One day, Lily met a unicorn in the park. The unicorn had shiny fur and a pretty dress. Lily asked the unicorn, "Where did you come from?"
+The unicorn replied, "I came from the forest and wanted to meet you, Lily. I am here to make sure you are safe."
+Lily and the unicorn played together and had lots of fun. But then, the unicorn started to act funny. Lily didn't know what was happening. Suddenly, the unicorn turned into a little girl and said, "I was under a spell, and your kindness broke it. Thank you for breaking it."
+Lily was surprised and happy. She gave the unicorn a big hug and they played together all day. From that day on, the unicorn would always come to play with Lily - her new friend.
+```
+
+```
+Prompt: The dragon flew over the mountains
+
+Output:
+The dragon flew over the mountains, over the rivers and over the rivers. He was very brave and strong.
+One day, the dragon saw something very strange. It was a big, shiny rock. He wanted to know what it was, so he flew down and touched it with his nose. Suddenly, the rock began to move!
+The dragon was so surprised! He had never seen anything like it before. He looked around and saw that it was a little mouse! The mouse was very scared and started to run away.
+The dragon was very sad. He wanted to help the mouse, so he decided to try and make friends. He flew around and around until he found the mouse. He said hello to the mouse and asked if he wanted to be friends.
+The mouse was so happy! He said yes, and they played together all day long. From then on, the dragon and the mouse were the best of friends. They had lots of fun together and the dragon was never lonely again.
+```
+
 ## Configuration ⚙️
 
 Key parameters (modify in `config.py`):
