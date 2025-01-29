@@ -82,8 +82,7 @@ Architecture:
 - 8 heads
 - 8-layer transformer
 - 512 embedding dimension
-- Trained for 30,000 iterations
-- Trained on `~4 Billion Tokens`
+- Trained on `~4 Billion Tokens` for around `18.5` hours
 
 Validation Loss - `1.0491`
 
