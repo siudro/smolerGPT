@@ -139,4 +139,3 @@ Contributions welcome! Please open an issue or PR for:
 ---
 
 **Note**: This implementation is inspired by modern LLM training practices and adapted for educational purposes. For production use, consider scaling up model size and dataset.
-```
