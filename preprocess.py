@@ -1,4 +1,5 @@
 import os
+import argparse
 import json
 import requests
 from pathlib import Path
@@ -99,3 +100,44 @@ def pretokenize(vocab_size: int) -> None:
     func = partial(process_shard, vocab_size=vocab_size)
     with ProcessPoolExecutor() as executor:
         executor.map(func, enumerate(shard_filenames))
+
+def prepare_dataset(vocab_size: int) -> None:
+    print("Step 1: Downloading dataset...")
+    download()
+    print("\nStep 2: Training vocabulary...")
+    train_vocab(vocab_size)
+    print("\nStep 3: Pretokenizing dataset...")
+    pretokenize(vocab_size)
+    print("\nDataset preparation complete!")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Process TinyStories dataset')
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    download_parser = subparsers.add_parser('download', help='Download TinyStories dataset')
+    
+    vocab_parser = subparsers.add_parser('train-vocab', help='Train vocabulary')
+    vocab_parser.add_argument('--vocab-size', type=int, required=True,
+                            help='Size of vocabulary to train')
+    
+    pretok_parser = subparsers.add_parser('pretokenize', help='Pretokenize the dataset')
+    pretok_parser.add_argument('--vocab-size', type=int, required=True,
+                            help='Vocabulary size to use for tokenization')
+
+    prepare_parser = subparsers.add_parser('prepare-dataset', 
+                                         help='Run all dataset preparation steps sequentially')
+    prepare_parser.add_argument('--vocab-size', type=int, required=True,
+                              help='Vocabulary size for training and tokenization')
+    
+    args = parser.parse_args()
+    
+    if args.command == 'download':
+        download()
+    elif args.command == 'train-vocab':
+        train_vocab(args.vocab_size)
+    elif args.command == 'pretokenize':
+        pretokenize(args.vocab_size)
+    elif args.command == 'prepare-dataset':
+        prepare_dataset(args.vocab_size)
+    else:
+        parser.print_help()    
