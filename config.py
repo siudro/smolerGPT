@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-
+import torch
+  
 
 @dataclass
 class GPTConfig:
@@ -32,6 +33,6 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 4
     batch_size: int = 64
 
-    device: str = "cuda"
+    device: str = str(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     dtype: str = "bfloat16"
     compile: bool = True
