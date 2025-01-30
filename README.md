@@ -162,4 +162,20 @@ Contributions welcome! Please open an issue or PR for:
 
 ---
 
+### GPU Specs (Rented via LightningAI)  
+- **GPU**: NVIDIA L4 Tensor Core (Optimized for AI workloads)  
+- **vCPUs**: 16  
+- **RAM**: 64 GB  
+- **VRAM**: 24 GB  
+- **Performance**:  
+  - **FP32**: 30.3 TFLOPs  
+  - **TF32**: 62.5 TFLOPs  
+  - **BFLOAT16/FP16**: 121 TFLOPs  
+  - **INT8**: 242.5 TOPs  
+  - **INT4**: 485 TOPs  
+
+Ideal for inference and smaller training workloads. For large-scale training, consider A100 GPUs.  
+
+---
+
 **Note**: This implementation is inspired by modern LLM training practices and adapted for educational purposes. For production use, consider scaling up model size and dataset.
