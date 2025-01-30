@@ -20,7 +20,7 @@ A minimal PyTorch implementation for training your own small LLM from scratch. D
 ## Installation 🛠️
 
 ```bash
-pip install torch sentencepiece tqdm requests numpy
+pip install -r requirements.txt
 ```
 
 **Requirements**:
