@@ -162,4 +162,11 @@ Contributions welcome! Please open an issue or PR for:
 
 ---
 
+### Training RIG SPECS (Rented via LightningAI)  
+- **GPU**: NVIDIA L4 Tensor Core (Optimized for AI workloads)  
+- **vCPUs**: 16  
+- **RAM**: 64 GB  
+- **VRAM**: 24 GB  
+---
+
 **Note**: This implementation is inspired by modern LLM training practices and adapted for educational purposes. For production use, consider scaling up model size and dataset.
