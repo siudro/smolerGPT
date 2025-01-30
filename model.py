@@ -3,16 +3,54 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import inspect
-from typing import Optional, Tuple
-from dataclasses import dataclass
 
 from config import GPTConfig
+
+
+class Rotary(torch.nn.Module):
+
+    def __init__(self, dim, base=10_000):
+        super().__init__()
+        self.dim = dim
+        self.base = base
+        self.inv_freq = None
+        self.seq_len_cached = None
+        self.cos_cached = None
+        self.sin_cached = None
+
+    def forward(self, q, k):
+        seq_len = q.shape[1]
+        if seq_len != self.seq_len_cached:
+            self.inv_freq = 1.0 / (
+                self.base
+                ** (torch.arange(0, self.dim, 2, device=q.device).float() / self.dim)
+            )
+            self.seq_len_cached = seq_len
+            t = torch.arange(seq_len, device=q.device).type_as(self.inv_freq)
+            freqs = torch.outer(t, self.inv_freq)
+            self.cos_cached = freqs.cos().bfloat16()
+            self.sin_cached = freqs.sin().bfloat16()
+        cos, sin = self.cos_cached[None, :, None, :], self.sin_cached[None, :, None, :]
+        q_ = self.apply_rotary_emb(q, cos, sin)
+        k_ = self.apply_rotary_emb(k, cos, sin)
+        return q_, k_
+
+    def apply_rotary_emb(self, x, cos, sin):
+        assert x.ndim == 4  # multihead attention
+        d = x.shape[3] // 2
+        x1 = x[..., :d]
+        x2 = x[..., d:]
+        y1 = x1 * cos + x2 * sin
+        y2 = x1 * (-sin) + x2 * cos
+        return torch.cat([y1, y2], 3).type_as(x)
 
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
+        assert config.n_embed % config.n_head == 0
+        self.head_dim = config.n_embed // config.n_head
         self.c_attn = nn.Linear(config.n_embed, 3 * config.n_embed, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embed, config.n_embed, bias=config.bias)
         self.attn_dropout = nn.Dropout(config.dropout)
@@ -29,6 +67,8 @@ class CausalSelfAttention(nn.Module):
                 ),
             )
 
+        self.rotary = Rotary(self.head_dim)
+
     def forward(self, x):
         B, T, C = x.shape
 
@@ -36,6 +76,9 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
         k = k.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
         v = v.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
+
+        # apply rotary embeddings to q and k
+        q, k = self.rotary(q, k)
 
         if self.flash:
             y = F.scaled_dot_product_attention(
@@ -98,7 +141,6 @@ class GPT(nn.Module):
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(config.vocab_size, config.n_embed),
-                wpe=nn.Embedding(config.block_size, config.n_embed),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
                 ln_f=nn.RMSNorm(config.n_embed),
@@ -126,13 +168,7 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx, targets=None):
-        device = idx.device
-        b, t = idx.shape
-        pos_emb = self.transformer.wpe(
-            torch.arange(0, t, dtype=torch.long, device=device)
-        )
-        tok_emb = self.transformer.wte(idx)
-        x = tok_emb + pos_emb
+        x = self.transformer.wte(idx)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
