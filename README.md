@@ -9,6 +9,7 @@ A minimal PyTorch implementation for training your own small LLM from scratch. D
   - Flash Attention (when available)
   - RMSNorm and SwiGLU
   - Efficient top-k/p/min-p sampling
+  - Rotary embeddings - RoPE
 - **Training Features**:
   - Mixed precision (bfloat16/float16)
   - Gradient accumulation
