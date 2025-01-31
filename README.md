@@ -9,6 +9,7 @@ A minimal PyTorch implementation for training your own small LLM from scratch. D
   - Flash Attention (when available)
   - RMSNorm and SwiGLU
   - Efficient top-k/p/min-p sampling
+  - Rotary embeddings - RoPE (Optional)
 - **Training Features**:
   - Mixed precision (bfloat16/float16)
   - Gradient accumulation
@@ -124,7 +125,8 @@ GPTConfig(
     n_head=8,          # Number of attention heads
     n_embed=512,       # Embedding dimension
     dropout=0.2,       # Dropout rate
-    bias=False         # Use bias in layers
+    bias=False,        # Use bias in layers
+    use_rotary=False,  # Toggle rotary embeddings
 )
 ```
 
