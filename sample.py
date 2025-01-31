@@ -11,7 +11,7 @@ def parse_args():
     parser.add_argument(
         "--ckpt_path",
         type=str,
-        required=True,
+        required=False,
         help="Full path to the checkpoint file",
         default="out/ckpt.pt"
     )
