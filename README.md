@@ -60,7 +60,7 @@ python sample.py \
 wget https://huggingface.co/OmAlve/TinyStories-SmolGPT/resolve/main/tok4096.model -P data/
 
 # Download pre-trained checkpoint
-wget https://huggingface.co/OmAlve/TinyStories-SmolGPT/resolve/main/ckpt-v1.pt -P out/
+wget https://huggingface.co/OmAlve/TinyStories-SmolGPT/resolve/main/ckpt.pt -P out/
 ```
 
 2. **Run Inference**
@@ -68,7 +68,7 @@ wget https://huggingface.co/OmAlve/TinyStories-SmolGPT/resolve/main/ckpt-v1.pt -
 python sample.py \
     --prompt "Once upon a time" \
     --tokenizer_path data/tok4096.model \
-    --ckpt_dir out/ \
+    --ckpt_path out/ckpt.pt \
     --num_samples 3 \
     --max_new_tokens 200 \
     --temperature 0.7

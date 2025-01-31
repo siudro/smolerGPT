@@ -9,15 +9,16 @@ from config import GPTConfig
 def parse_args():
     parser = argparse.ArgumentParser(description="GPT Inference Script")
     parser.add_argument(
-        "--ckpt_dir",
+        "--ckpt_path",
         type=str,
-        default="out/",
-        help="Directory containing checkpoint files",
+        required=True,
+        help="Full path to the checkpoint file",
+        default="out/ckpt.pt"
     )
     parser.add_argument(
         "--tokenizer_path",
         type=str,
-        default=os.path.join("out", "tok4096.model"),
+        default=os.path.join("data", "tok4096.model"),
         help="Path to tokenizer model",
     )
     parser.add_argument(
@@ -83,8 +84,7 @@ def setup_device(args):
 
 
 def load_model(args):
-    ckpt_path = os.path.join(args.ckpt_dir, "ckpt-v1.pt")
-    checkpoint = torch.load(ckpt_path, map_location=args.device)
+    checkpoint = torch.load(args.ckpt_path, map_location=args.device)
     gptconf = GPTConfig(**checkpoint["model_args"])
     model = GPT(gptconf)
 
