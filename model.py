@@ -22,14 +22,13 @@ class Rotary(torch.nn.Module):
         seq_len = q.shape[1]
         if seq_len != self.seq_len_cached:
             self.inv_freq = 1.0 / (
-                self.base
-                ** (torch.arange(0, self.dim, 2, device=q.device).float() / self.dim)
+                self.base ** (torch.arange(0, self.dim, 2, device=q.device) / self.dim)
             )
             self.seq_len_cached = seq_len
             t = torch.arange(seq_len, device=q.device).type_as(self.inv_freq)
             freqs = torch.outer(t, self.inv_freq)
-            self.cos_cached = freqs.cos().bfloat16()
-            self.sin_cached = freqs.sin().bfloat16()
+            self.cos_cached = freqs.cos().type_as(q)
+            self.sin_cached = freqs.sin().type_as(q)
         cos, sin = self.cos_cached[None, :, None, :], self.sin_cached[None, :, None, :]
         q_ = self.apply_rotary_emb(q, cos, sin)
         k_ = self.apply_rotary_emb(k, cos, sin)
@@ -67,7 +66,8 @@ class CausalSelfAttention(nn.Module):
                 ),
             )
 
-        self.rotary = Rotary(self.head_dim)
+        if config.use_rotary:
+            self.rotary = Rotary(self.head_dim)
 
     def forward(self, x):
         B, T, C = x.shape
@@ -77,8 +77,9 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
         v = v.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
 
-        # apply rotary embeddings to q and k
-        q, k = self.rotary(q, k)
+        # Apply rotary embeddings if enabled
+        if self.config.use_rotary:
+            q, k = self.rotary(q, k)
 
         if self.flash:
             y = F.scaled_dot_product_attention(
@@ -138,14 +139,19 @@ class GPT(nn.Module):
         super().__init__()
         self.config = config
 
-        self.transformer = nn.ModuleDict(
-            dict(
-                wte=nn.Embedding(config.vocab_size, config.n_embed),
-                drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-                ln_f=nn.RMSNorm(config.n_embed),
-            )
-        )
+        # Create base transformer components
+        transformer_dict = {
+            "wte": nn.Embedding(config.vocab_size, config.n_embed),
+            "drop": nn.Dropout(config.dropout),
+            "h": nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            "ln_f": nn.RMSNorm(config.n_embed),
+        }
+
+        # Only add positional embeddings if not using rotary
+        if not config.use_rotary:
+            transformer_dict["wpe"] = nn.Embedding(config.block_size, config.n_embed)
+
+        self.transformer = nn.ModuleDict(transformer_dict)
 
         self.lm_head = nn.Linear(config.n_embed, config.vocab_size, bias=False)
 
@@ -169,6 +175,16 @@ class GPT(nn.Module):
 
     def forward(self, idx, targets=None):
         x = self.transformer.wte(idx)
+
+        # Add learnable positional embeddings
+        if not self.config.use_rotary:
+            device = idx.device
+            b, t = idx.shape
+            pos_emb = self.transformer.wpe(
+                torch.arange(0, t, dtype=torch.long, device=device)
+            )
+            x = x + pos_emb
+
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)

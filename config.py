@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import torch
-  
+
 
 @dataclass
 class GPTConfig:
@@ -11,6 +11,7 @@ class GPTConfig:
     n_embed: int = 512
     dropout: float = 0.2
     bias: bool = False
+    use_rotary: bool = True
 
 
 @dataclass
