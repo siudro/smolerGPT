@@ -11,7 +11,7 @@ class GPTConfig:
     n_embed: int = 512
     dropout: float = 0.2
     bias: bool = False
-    use_rotary: bool = True
+    use_rotary: bool = False
 
 
 @dataclass
