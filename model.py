@@ -1,230 +1,134 @@
-import math
+import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import inspect
-from typing import Optional, Tuple
-from dataclasses import dataclass
-
+import argparse
+from tokenizer import Tokenizer
+from model import GPT
 from config import GPTConfig
 
 
-class CausalSelfAttention(nn.Module):
-    def __init__(self, config: GPTConfig):
-        super().__init__()
-        self.config = config
-        self.c_attn = nn.Linear(config.n_embed, 3 * config.n_embed, bias=config.bias)
-        self.c_proj = nn.Linear(config.n_embed, config.n_embed, bias=config.bias)
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
-
-        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-
-        if not self.flash:
-            print("Not using flash attention")
-            self.register_buffer(
-                "bias",
-                torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                    1, 1, config.block_size, config.block_size
-                ),
-            )
-
-    def forward(self, x):
-        B, T, C = x.shape
-
-        q, k, v = self.c_attn(x).split(self.config.n_embed, dim=2)
-        q = q.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
-        k = k.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
-        v = v.view(B, T, self.config.n_head, C // self.config.n_head).transpose(1, 2)
-
-        if self.flash:
-            y = F.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=None,
-                dropout_p=self.config.dropout if self.training else 0,
-                is_causal=True,
-            )
-        else:
-            attn_pattern = (q @ k.transpose(-2, -1)) * (
-                1.0 / math.sqrt(k.shape[-1])
-            )  # B, nh, T, T
-            attn_pattern = attn_pattern.masked_fill(
-                self.bias[:, :, :T, :T] == 0, float("-inf")
-            )
-            attn = F.softmax(attn_pattern, dim=-1)
-            y = attn @ v  # B, nh, T, T @ B, nh, T, hs -> B, nh, T, hs
-
-        y = y.transpose(1, 2).contiguous().view(B, T, C)
-
-        y = self.resid_dropout(self.c_proj(y))
-        return y
-
-
-class FeedForward(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        hidden_dim = 4 * config.n_embed
-        hidden_dim = int(2 * hidden_dim / 3)
-        self.w1 = nn.Linear(config.n_embed, hidden_dim, bias=False)
-        self.w2 = nn.Linear(hidden_dim, config.n_embed, bias=False)
-        self.w3 = nn.Linear(config.n_embed, hidden_dim, bias=False)
-        self.dropout = nn.Dropout(config.dropout)
-
-    def forward(self, x):
-        return self.dropout(self.w2(F.silu(self.w1(x)) * self.w3(x)))
+def parse_args():
+    parser = argparse.ArgumentParser(description="GPT Inference Script")
+    parser.add_argument(
+        "--ckpt_dir",
+        type=str,
+        default="out/",
+        help="Directory containing checkpoint files",
+    )
+    parser.add_argument(
+        "--tokenizer_path",
+        type=str,
+        default=os.path.join("out", "tok4096.model"),
+        help="Path to tokenizer model",
+    )
+    parser.add_argument(
+        "--prompt", type=str, required=True, help="Input prompt for generation"
+    )
+    parser.add_argument(
+        "--num_samples", type=int, default=3, help="Number of samples to generate"
+    )
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=500,
+        help="Maximum number of new tokens to generate",
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.5, help="Sampling temperature"
+    )
+    parser.add_argument(
+        "--top_k", type=int, default=None, help="Top-k sampling parameter"
+    )
+    parser.add_argument(
+        "--top_p", type=float, default=None, help="Top-p (nucleus) sampling parameter"
+    )
+    parser.add_argument(
+        "--min_p", type=float, default=0.05, help="Minimum probability for sampling"
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        choices=["cuda", "cpu"],
+        help="Device to run inference on",
+    )
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="bfloat16",
+        choices=["float16", "bfloat16", "float32"],
+        help="Data type for inference",
+    )
+    parser.add_argument(
+        "--compile", action="store_true", help="Whether to compile the model"
+    )
+    return parser.parse_args()
 
 
-class Block(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.ln_1 = nn.RMSNorm(config.n_embed)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.RMSNorm(config.n_embed)
-        self.ffd = FeedForward(config)
+def setup_device(args):
+    torch.manual_seed(args.seed)
+    if args.device == "cuda":
+        torch.cuda.manual_seed(args.seed)
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.ffd(self.ln_2(x))
-        return x
+    dtype_map = {
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "float32": torch.float32,
+    }
+    dtype = dtype_map[args.dtype]
+    ctx = torch.autocast(args.device, dtype=dtype)
+    return ctx
 
 
-class GPT(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
+def load_model(args):
+    ckpt_path = os.path.join(args.ckpt_dir, "ckpt-v1.pt")
+    checkpoint = torch.load(ckpt_path, map_location=args.device)
+    gptconf = GPTConfig(**checkpoint["model_args"])
+    model = GPT(gptconf)
 
-        self.transformer = nn.ModuleDict(
-            dict(
-                wte=nn.Embedding(config.vocab_size, config.n_embed),
-                wpe=nn.Embedding(config.block_size, config.n_embed),
-                drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-                ln_f=nn.RMSNorm(config.n_embed),
-            )
-        )
+    state_dict = checkpoint["model"]
+    unwanted_prefix = "_orig_mod."
+    for k, _ in list(state_dict.items()):
+        if k.startswith(unwanted_prefix):
+            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
 
-        self.lm_head = nn.Linear(config.n_embed, config.vocab_size, bias=False)
+    model.eval()
+    model.to(args.device)
+    if args.compile:
+        model = torch.compile(model)
+    return model
 
-        self.transformer.wte.weight = self.lm_head.weight
 
-        self.apply(self._init_weights)
+def main():
+    args = parse_args()
+    ctx = setup_device(args)
+    model = load_model(args)
 
-        for pn, p in self.named_parameters():
-            if pn.endswith("c_proj.weight"):
-                torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
+    enc = Tokenizer(args.tokenizer_path)
+    encode = lambda s: enc.encode(s, bos=True, eos=False)
+    decode = lambda l: enc.decode(l)
+
+    x = torch.tensor(
+        encode(args.prompt), dtype=torch.long, device=args.device
+    ).unsqueeze(0)
+
+    with torch.no_grad():
+        with ctx:
+            for k in range(args.num_samples):
+                y = model.generate(
+                    x,
+                    args.max_new_tokens,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    min_p=args.min_p,
                 )
+                print(decode(y[0].tolist()))
+                print("------------------")
 
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
-        device = idx.device
-        b, t = idx.shape
-        pos_emb = self.transformer.wpe(
-            torch.arange(0, t, dtype=torch.long, device=device)
-        )
-        tok_emb = self.transformer.wte(idx)
-        x = tok_emb + pos_emb
-        for block in self.transformer.h:
-            x = block(x)
-        x = self.transformer.ln_f(x)
-
-        if targets is not None:
-            logits = self.lm_head(x)
-            loss = F.cross_entropy(
-                logits.view(-1, logits.shape[-1]), targets.view(-1), ignore_index=-1
-            )
-        else:
-            logits = self.lm_head(x[:, [-1], :])
-            loss = None
-        return logits, loss
-
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
-        param_dict = {pn: p for pn, p in self.named_parameters()}
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {"params": decay_params, "weight_decay": weight_decay},
-            {"params": nodecay_params, "weight_decay": 0.0},
-        ]
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(
-            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
-        )
-        print(
-            f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
-        )
-
-        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and device_type == "cuda"
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=betas, **extra_args
-        )
-        print(f"using fused AdamW: {use_fused}")
-
-        return optimizer
-
-    @torch.no_grad()
-    def generate(
-        self, idx, max_new_tokens, temperature=1.0, top_k=None, top_p=None, min_p=None
-    ):
-        for _ in range(max_new_tokens):
-            context = (
-                idx
-                if idx.size(1) < self.config.block_size
-                else idx[:, -self.config.block_size :]
-            )
-            logits, _ = self(context)
-
-            logits = logits[:, -1, :] / temperature
-
-            if top_p is not None and top_p > 0.0:
-                probs = torch.softmax(logits, dim=-1)
-                sorted_probs, sorted_indices = torch.sort(
-                    probs, descending=True, dim=-1
-                )
-                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-
-                mask = cumulative_probs >= top_p
-                mask[..., 0] = True
-
-                cutoff_indices = mask.int().argmax(dim=-1, keepdim=True)
-
-                top_p_mask = torch.zeros_like(logits, dtype=torch.bool)
-                for b in range(logits.size(0)):
-                    cut = cutoff_indices[b].item()
-                    kept_indices = sorted_indices[b, : cut + 1]
-                    top_p_mask[b, kept_indices] = True
-                logits[~top_p_mask] = float("-inf")
-
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = float("-inf")
-
-            if min_p is not None and min_p > 0.0:
-                logit_max = logits.max(dim=-1, keepdim=True).values
-                threshold = logit_max + torch.log(
-                    torch.tensor(min_p, device=logits.device, dtype=logits.dtype)
-                )
-                logits[logits < threshold] = float("-inf")
-
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
-
-            if idx_next == 2:
-                break
-            idx = torch.cat([idx, idx_next], dim=-1)
-
-        return idx
+if __name__ == "__main__":
+    main()
