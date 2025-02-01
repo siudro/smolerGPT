@@ -18,14 +18,19 @@ A modified version of SmolGPT (12.3M) optimized to train on consumer GPUs, speci
 - Learning rate schedule: 1e-4 → 1e-5
 
 ### Model Capabilities
-- Basic story continuation
-- Simple dialogue generation
+- Fast inference on consumer GPU
 - Short-form narrative generation
+- Basic story structure understanding
+- Grammatically correct sentences
+- Dialogue handling with quotes
+- Name recognition and usage
 
 ### Current Limitations
-- Tendency to repeat phrases
-- Limited context window
-- Basic narrative structures
+- Repetitive patterns ("I'm sorry", "Lily")
+- Limited context retention
+- Fixed story elements (park, playing)
+- Memory constraints (256 token context)
+- Vocabulary fixation on common patterns
 
 ## Implementation & Analysis 🛠️
 
@@ -51,20 +56,6 @@ A modified version of SmolGPT (12.3M) optimized to train on consumer GPUs, speci
 - Dynamic vocabulary size from config
 - Simplified tokenizer path handling
 - Memory-efficient data loading
-
-### 4. Model Capabilities
-- Fast inference on consumer GPU
-- Basic story structure understanding
-- Grammatically correct sentences
-- Dialogue handling with quotes
-- Name recognition and usage
-
-### 5. Current Limitations
-- Repetitive patterns ("I'm sorry", "Lily")
-- Limited context retention
-- Fixed story elements (park, playing)
-- Memory constraints (256 token context)
-- Vocabulary fixation on common patterns
 
 
 ## Quick Start 🚀
