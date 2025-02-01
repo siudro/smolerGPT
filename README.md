@@ -1,174 +1,116 @@
-# SMOL-GPT 🦾
+# SmolerGPT: RTX 3050 Edition 🎮
 
-A minimal PyTorch implementation for training your own small LLM from scratch. Designed for educational purposes and simplicity, featuring efficient training, flash attention, and modern sampling techniques.
+A modified version of SmolGPT optimized to train on consumer GPUs, specifically the NVIDIA RTX 3050 (8GB VRAM). Enjoyed training an LLM for the first time and locally, thanks to the amazing work of Om-Alve on [smolGPT](https://github.com/Om-Alve/smolGPT)!
 
-## Features ✨
+## Training Results 📊
 
-- **Minimal Codebase**: Pure PyTorch implementation with no abstraction overhead
-- **Modern Architecture**: GPT model with:
-  - Flash Attention (when available)
-  - RMSNorm and SwiGLU
-  - Efficient top-k/p/min-p sampling
-  - Rotary embeddings - RoPE (Optional)
-- **Training Features**:
-  - Mixed precision (bfloat16/float16)
-  - Gradient accumulation
-  - Learning rate decay with warmup
-  - Weight decay & gradient clipping
-- **Dataset Support**: Built-in TinyStories dataset processing
-- **Custom Tokenizer**: SentencePiece tokenizer training integration
+### Performance Metrics
+- **Training Duration**: 30000 iterations
+- **Final Training Loss**: 3.7457
+- **Final Validation Loss**: 3.8243
+- **Best Training Loss**: 3.5345
+- **Best Validation Loss**: 3.5659
 
-## Installation 🛠️
+### Learning Progress
+![Training Loss Curve](loss_curve.png)
+- Initial Loss: ~8.41 → Final Loss: ~3.75
+- Convergence around iteration 6000-7000
+- Learning rate schedule: 1e-4 → 1e-5
 
+### Model Capabilities
+- Basic story continuation
+- Simple dialogue generation
+- Short-form narrative generation
+
+### Current Limitations
+- Tendency to repeat phrases
+- Limited context window
+- Basic narrative structures
+
+## Implementation & Analysis 🛠️
+
+### 1. Architecture Adaptations
+- Reduced context length (256 tokens)
+- Fewer transformer layers (6 layers)
+- Smaller embedding dimension (384)
+- ~12.3M parameters (46.9MB on disk)
+- Removed rotary embeddings
+- Simplified attention mechanism
+- Optimized batch size for 8GB VRAM
+
+### 2. Memory Management
+- Gradient accumulation (steps=8)
+- Token clamping for CUDA stability
+- Optimized evaluation frequency
+- Dynamic GPU memory allocation
+- Reduced dataset size for faster training
+
+### 3. Data Processing
+- Subset of TinyStories dataset (20 files, 0.1 sample rate)
+- Dynamic vocabulary size from config
+- Simplified tokenizer path handling
+- Memory-efficient data loading
+
+### 4. Model Capabilities
+- Fast inference on consumer GPU
+- Basic story structure understanding
+- Grammatically correct sentences
+- Dialogue handling with quotes
+- Name recognition and usage
+
+### 5. Current Limitations
+- Repetitive patterns ("I'm sorry", "Lily")
+- Limited context retention
+- Fixed story elements (park, playing)
+- Memory constraints (256 token context)
+- Vocabulary fixation on common patterns
+
+
+## Quick Start 🚀
+
+1. **Install Requirements (python 3.12)**
 ```bash
 pip install -r requirements.txt
 ```
 
-**Requirements**:
-- Python 3.8+
-- PyTorch 2.0+ with CUDA
-- Modern GPU (recommended)
-
-## Quick Start 🚀
-
-### Option 1: Full Training Cycle
-
-1. **Prepare Dataset**
+2. **Prepare Dataset**
 ```bash
-python preprocess.py prepare-dataset --vocab-size 4096
+python preprocess.py prepare-dataset --vocab-size 4096 --num-files 20 --sample-rate 0.1
 ```
+This will:
+- Download subset of TinyStories dataset
+- Train tokenizer with vocab size 4096
+- Process data for training
 
-2. **Start Training**
+3. **Start Training**
 ```bash
 python train.py
 ```
 
-3. **Generate Text**
+4. **Test the Model (can test while still training)**
 ```bash
-python sample.py \
-    --prompt "Once upon a time" \
-    --num_samples 3 \
-    --temperature 0.7 \
-    --max_new_tokens 500
+python chat.py
 ```
 
-### Option 2: Use Pre-trained Model
+## Model Usage 🤖
 
-1. **Download Assets**
+### Chat Parameters
+- Temperature: 0.6 (conservative sampling)
+- Top-k: 20 (focused selection)
+- Max tokens: preferred to be 32 as repetitions starts afterwards, but it can generate 200 per response
+
+### Visualization
 ```bash
-# Download tokenizer
-wget https://huggingface.co/OmAlve/TinyStories-SmolGPT/resolve/main/tok4096.model -P data/
-
-# Download pre-trained checkpoint
-wget https://huggingface.co/OmAlve/TinyStories-SmolGPT/resolve/main/ckpt.pt -P out/
+python plot_loss.py
 ```
+Generates training progress plots and metrics.
 
-2. **Run Inference**
-```bash
-python sample.py \
-    --prompt "Once upon a time" \
-    --tokenizer_path data/tok4096.model \
-    --ckpt_path out/ckpt.pt \
-    --num_samples 3 \
-    --max_new_tokens 200 \
-    --temperature 0.7
-```
+### Future Optimizations
+- [ ] Repetition penalties
+- [ ] Context window experiments
+- [ ] Token sampling improvements
+- [ ] Memory efficiency tweaks
+- [ ] Reinforcement Learning?
+- [ ] Regularization
+- [ ] Increase training dataset
 
-## Pre-trained Model Details 🔍
-
-The provided checkpoint was trained on the TinyStories dataset.
-
-Architecture:
-- 4096-token vocabulary
-- 8 heads
-- 8-layer transformer
-- 512 embedding dimension
-- Trained on `~4 Billion Tokens` for around `18.5` hours
-
-Validation Loss - `1.0491`
-
-![Loss Curve](assets/loss.png)
-
-## Sample Outputs 📝
-
-### Example 1
-```text
-Prompt: One day, Lily met a unicorn
-
-Output:
-One day, Lily met a unicorn in the park. The unicorn had shiny fur and a pretty dress. Lily asked the unicorn, "Where did you come from?"
-The unicorn replied, "I came from the forest and wanted to meet you, Lily. I am here to make sure you are safe."
-Lily and the unicorn played together and had lots of fun. But then, the unicorn started to act funny. Lily didn't know what was happening. Suddenly, the unicorn turned into a little girl and said, "I was under a spell, and your kindness broke it. Thank you for breaking it."
-Lily was surprised and happy. She gave the unicorn a big hug and they played together all day. From that day on, the unicorn would always come to play with Lily - her new friend.
-```
-
-```
-Prompt: The dragon flew over the mountains
-
-Output:
-The dragon flew over the mountains, over the rivers and over the rivers. He was very brave and strong.
-One day, the dragon saw something very strange. It was a big, shiny rock. He wanted to know what it was, so he flew down and touched it with his nose. Suddenly, the rock began to move!
-The dragon was so surprised! He had never seen anything like it before. He looked around and saw that it was a little mouse! The mouse was very scared and started to run away.
-The dragon was very sad. He wanted to help the mouse, so he decided to try and make friends. He flew around and around until he found the mouse. He said hello to the mouse and asked if he wanted to be friends.
-The mouse was so happy! He said yes, and they played together all day long. From then on, the dragon and the mouse were the best of friends. They had lots of fun together and the dragon was never lonely again.
-```
-
-## Configuration ⚙️
-
-Key parameters (modify in `config.py`):
-
-**Model Architecture**:
-```python
-GPTConfig(
-    block_size=512,    # Context length
-    n_layer=8,         # Number of transformer layers
-    n_head=8,          # Number of attention heads
-    n_embed=512,       # Embedding dimension
-    dropout=0.2,       # Dropout rate
-    bias=False,        # Use bias in layers
-    use_rotary=False,  # Toggle rotary embeddings
-)
-```
-
-**Training**:
-```python
-TrainingConfig(
-    batch_size=64,
-    max_iters=30000,
-    learning_rate=6e-4,
-    weight_decay=0.1,
-    grad_clip=1.0,
-    warmup_iters=1000
-)
-```
-
-## File Structure 📁
-
-```
-om-alve-smolgpt/
-├── config.py       - Model & training configuration
-├── dataset.py      - Data loading & preprocessing
-├── model.py        - GPT model implementation
-├── preprocess.py   - Dataset preparation scripts
-├── sample.py       - Text generation script
-├── tokenizer.py    - Tokenizer wrapper
-└── train.py        - Main training loop
-```
-
-## Contributing 🤝
-
-Contributions welcome! Please open an issue or PR for:
-- Bug fixes
-- Performance improvements
-- New features
-
----
-
-### Training RIG SPECS (Rented via LightningAI)  
-- **GPU**: NVIDIA L4 Tensor Core (Optimized for AI workloads)  
-- **vCPUs**: 16  
-- **RAM**: 64 GB  
-- **VRAM**: 24 GB  
----
-
-**Note**: This implementation is inspired by modern LLM training practices and adapted for educational purposes. For production use, consider scaling up model size and dataset.
