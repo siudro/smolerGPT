@@ -1,17 +1,16 @@
 from dataclasses import dataclass
 import torch
-
+  
 
 @dataclass
 class GPTConfig:
-    block_size: int = 512
+    block_size: int = 256
     vocab_size: int = 4096
-    n_layer: int = 8
+    n_layer: int = 6
     n_head: int = 8
-    n_embed: int = 512
+    n_embed: int = 384
     dropout: float = 0.2
     bias: bool = False
-    use_rotary: bool = False
 
 
 @dataclass
@@ -28,12 +27,23 @@ class TrainingConfig:
     lr_decay_iters: int = 30000
     min_lr: float = 6e-5
 
-    eval_interval: int = 100
-    log_interval: int = 10
-    eval_iters: int = 200
-    gradient_accumulation_steps: int = 4
-    batch_size: int = 64
+    eval_interval: int = 50
+    log_interval: int = 1
+    eval_iters: int = 100
+    gradient_accumulation_steps: int = 8
+    batch_size: int = 32
 
-    device: str = str(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-    dtype: str = "bfloat16"
-    compile: bool = True
+    @property
+    def device(self) -> str:
+        if not torch.cuda.is_available():
+            print("WARNING: CUDA not available, using CPU")
+            return "cpu"
+        return "cuda"
+    
+    @property
+    def dtype(self) -> torch.dtype:
+        if self.device == "cpu":
+            return torch.float32  # Use float32 for CPU
+        return torch.float16     # Use float16 for GPU
+
+    compile: bool = False
