@@ -1,6 +1,6 @@
 # SmolerGPT: RTX 3050 Edition 🎮
 
-A modified version of SmolGPT optimized to train on consumer GPUs, specifically the NVIDIA RTX 3050 (8GB VRAM). Enjoyed training an LLM for the first time and locally, thanks to the amazing work of Om-Alve on [smolGPT](https://github.com/Om-Alve/smolGPT)!
+A modified version of SmolGPT (12.3M) optimized to train on consumer GPUs, specifically the NVIDIA RTX 3050 (8GB VRAM). Enjoyed training an LLM for the first time and locally, thanks to the amazing work of Om-Alve on [smolGPT](https://github.com/Om-Alve/smolGPT)!
 
 ## Training Results 📊
 
