@@ -32,6 +32,7 @@ A modified version of SmolGPT (12.3M) optimized to train on consumer GPUs, speci
 ### 1. Architecture Adaptations
 - Reduced context length (256 tokens)
 - Fewer transformer layers (6 layers)
+- Fewer attention heads (6)
 - Smaller embedding dimension (384)
 - ~12.3M parameters (46.9MB on disk)
 - Removed rotary embeddings
